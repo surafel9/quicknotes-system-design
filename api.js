@@ -123,8 +123,8 @@ function createNoteElement(note) {
  */
 async function loadNotes() {
   loadBtn.disabled = true;
+  submitBtn.disabled = true;
   setStatus('Loading notes...', 'loading');
-  notesList.innerHTML = '';
 
   try {
     const notes = await request('?_limit=10');
@@ -141,8 +141,77 @@ async function loadNotes() {
     setStatus(`Failed to load notes: ${error.message}. Please try again.`, 'error');
   } finally {
     loadBtn.disabled = false;
+    submitBtn.disabled = false;
+  }
+}
+
+/**
+ * Handle form submission to create a note (POST /posts)
+ * Validates title (required, max 100 chars), sends request,
+ * prepends created note to top of list, and clears form.
+ *
+ * @param {Event} event
+ */
+async function createNote(event) {
+  event.preventDefault();
+
+  const title = titleInput.value.trim();
+  const body = bodyInput.value.trim();
+
+  // Validation: title is required
+  if (!title) {
+    setStatus('Title is required to create a note.', 'error');
+    titleInput.focus();
+    return;
+  }
+
+  // Validation: maximum 100 characters
+  if (title.length > 100) {
+    setStatus(`Title must not exceed 100 characters (currently ${title.length}).`, 'error');
+    titleInput.focus();
+    return;
+  }
+
+  // Disable button while request is running
+  submitBtn.disabled = true;
+  loadBtn.disabled = true;
+  setStatus('Creating note...', 'loading');
+
+  try {
+    const createdNote = await request('', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        body,
+        userId: 1
+      })
+    });
+
+    // Remove any existing empty-state placeholder
+    const emptyState = notesList.querySelector('.empty-state');
+    if (emptyState) {
+      emptyState.remove();
+    }
+
+    // Add returned note to the top of the list
+    const noteEl = createNoteElement(createdNote);
+    notesList.prepend(noteEl);
+
+    // Show status code and new id
+    const statusCode = createdNote.status || 201;
+    setStatus(`Note created (status ${statusCode}, id ${createdNote.id}).`, 'success');
+
+    // Clear form
+    noteForm.reset();
+  } catch (error) {
+    setStatus(`Failed to create note: ${error.message}. Please try again.`, 'error');
+  } finally {
+    submitBtn.disabled = false;
+    loadBtn.disabled = false;
   }
 }
 
 // Event Listeners
 loadBtn.addEventListener('click', loadNotes);
+noteForm.addEventListener('submit', createNote);
+
