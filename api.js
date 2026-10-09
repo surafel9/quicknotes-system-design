@@ -83,7 +83,8 @@ function renderNotes(notes) {
 }
 
 /**
- * Create a single note DOM list item.
+ * Create a single note DOM list item with delete action.
+ * Uses textContent exclusively for user-provided strings.
  *
  * @param {Object} note
  * @returns {HTMLLIElement}
@@ -115,8 +116,65 @@ function createNoteElement(note) {
     li.appendChild(bodyEl);
   }
 
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'note-actions';
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'delete-btn';
+  deleteBtn.textContent = 'Delete';
+  deleteBtn.setAttribute('aria-label', `Delete note titled ${note.title}`);
+
+  deleteBtn.addEventListener('click', () => {
+    deleteNote(note.id, li, deleteBtn);
+  });
+
+  actionsDiv.appendChild(deleteBtn);
+  li.appendChild(actionsDiv);
+
   return li;
 }
+
+/**
+ * Delete a note by sending DELETE /posts/{id} to the server.
+ *
+ * NOTE ON JSONPLACEHOLDER BEHAVIOR:
+ * JSONPlaceholder is an online fake REST API for prototyping and testing.
+ * When a note is created via POST, JSONPlaceholder returns an artificial ID (e.g. 101),
+ * but it does not actually persist the record on their backend storage.
+ * Consequently, sending DELETE /posts/101 simulates the operation and responds
+ * with HTTP 200 OK without modifying a real database. We handle this sensibly by
+ * sending the actual DELETE request to validate network and API contract semantics,
+ * checking response.ok via our reusable request() helper, and safely removing the note
+ * element from the DOM list upon successful completion.
+ *
+ * @param {number|string} id - Note ID to delete
+ * @param {HTMLElement} noteElement - The note LI element to remove on success
+ * @param {HTMLButtonElement} buttonEl - The delete button to disable while loading
+ */
+async function deleteNote(id, noteElement, buttonEl) {
+  buttonEl.disabled = true;
+  setStatus(`Deleting note #${id}...`, 'loading');
+
+  try {
+    await request(`/${id}`, {
+      method: 'DELETE'
+    });
+
+    // Remove the note element from the DOM
+    noteElement.remove();
+    setStatus(`Note #${id} deleted successfully.`, 'success');
+
+    // Show empty state if all notes have been removed
+    if (notesList.children.length === 0) {
+      renderNotes([]);
+    }
+  } catch (error) {
+    setStatus(`Failed to delete note #${id}: ${error.message}. Please try again.`, 'error');
+    buttonEl.disabled = false;
+  }
+}
+
 
 /**
  * Load 10 notes from server (GET /posts?_limit=10)
